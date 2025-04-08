@@ -1,0 +1,14 @@
+syntax = "proto3";
+package blockchain;
+option go_package = "./proto";
+import "proto/block.proto";
+
+service Master {
+  rpc RegisterNode(NodeInfo) returns (stream NodeInfo) {}
+  rpc RegisterNewBlockRequirements(NodeInfo) returns (stream NewBlockRequirementsResponse) {}
+}
+
+message NodeInfo {
+  string host = 1;  // IP address
+  int32 port = 2;
+}
