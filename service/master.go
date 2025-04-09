@@ -1,15 +1,18 @@
-package app
+package service
 
 import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"sync"
 
 	pb "blockchain/proto"
+
+	"google.golang.org/grpc"
 )
 
-type masterServer struct {
+type MasterServer struct {
 	blockchainServer *BlockchainServer
 
 	pb.UnimplementedMasterServer
@@ -19,8 +22,8 @@ type masterServer struct {
 	mNodeNewBlockStream map[string]pb.Master_RegisterNewBlockRequirementsServer
 }
 
-func NewMasterServer() *masterServer {
-	return &masterServer{
+func NewMasterServer() *MasterServer {
+	return &MasterServer{
 		mu:                  &sync.RWMutex{},
 		mNodeInfo:           make(map[string]*pb.NodeInfo),
 		mNodeStream:         make(map[string]pb.Master_RegisterNodeServer),
@@ -28,11 +31,33 @@ func NewMasterServer() *masterServer {
 	}
 }
 
-func (s *masterServer) SetBlockchainService(service *BlockchainServer) {
+func (s *MasterServer) Start(ctx context.Context, port int32) error {
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+
+	server := grpc.NewServer()
+	masterServer := NewMasterServer()
+	pb.RegisterMasterServer(server, masterServer)
+	blockchainServer := NewBlockNode(nil, masterServer.ProcessAfterNewBlock)
+	pb.RegisterBlockchainServer(server, blockchainServer)
+
+	masterServer.SetBlockchainService(blockchainServer)
+
+	log.Printf("Master server listening at %v", lis.Addr())
+	if err := server.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %v", err)
+	}
+
+	return nil
+}
+
+func (s *MasterServer) SetBlockchainService(service *BlockchainServer) {
 	s.blockchainServer = service
 }
 
-func (s *masterServer) RegisterNode(req *pb.NodeInfo, stream pb.Master_RegisterNodeServer) error {
+func (s *MasterServer) RegisterNode(req *pb.NodeInfo, stream pb.Master_RegisterNodeServer) error {
 	nodeKey := fmt.Sprintf("%s:%d", req.Host, req.Port)
 	fmt.Println("New node at ", nodeKey)
 	s.mu.Lock()
@@ -73,7 +98,7 @@ END_OF_NODE_LIFE:
 	return nil
 }
 
-func (s *masterServer) RegisterNewBlockRequirements(req *pb.NodeInfo, stream pb.Master_RegisterNewBlockRequirementsServer) error {
+func (s *MasterServer) RegisterNewBlockRequirements(req *pb.NodeInfo, stream pb.Master_RegisterNewBlockRequirementsServer) error {
 	nodeKey := fmt.Sprintf("%s:%d", req.Host, req.Port)
 	fmt.Println("New block node at ", nodeKey)
 
@@ -95,7 +120,7 @@ func (s *masterServer) RegisterNewBlockRequirements(req *pb.NodeInfo, stream pb.
 	return nil
 }
 
-func (s *masterServer) notifyNodesOfNewRequirements(requirement *pb.NewBlockRequirementsResponse) {
+func (s *MasterServer) notifyNodesOfNewRequirements(requirement *pb.NewBlockRequirementsResponse) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	var wg sync.WaitGroup
@@ -112,7 +137,7 @@ func (s *masterServer) notifyNodesOfNewRequirements(requirement *pb.NewBlockRequ
 	wg.Wait()
 }
 
-func (s *masterServer) ProcessAfterNewBlock(ctx context.Context, block *pb.Block) error {
+func (s *MasterServer) ProcessAfterNewBlock(ctx context.Context, block *pb.Block) error {
 	requirement := s.blockchainServer.SetRequirement(ctx,
 		block.GetHeight()+1,
 		block.GetHash(),

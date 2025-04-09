@@ -1,4 +1,4 @@
-package app
+package service
 
 import (
 	pb "blockchain/proto"
