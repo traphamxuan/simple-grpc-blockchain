@@ -5,10 +5,11 @@ import "proto/block.proto";
 
 service Master {
   rpc RegisterNode(NodeInfo) returns (stream NodeInfo) {}
-  rpc RegisterNewBlockRequirements(NodeInfo) returns (stream NewBlockRequirementsResponse) {}
+  rpc RegisterNewBlockHeader(NodeInfo) returns (stream BlockHeader) {}
 }
 
 message NodeInfo {
   string host = 1;  // IP address
   int32 port = 2;
+  string status = 3; // ACTIVE, PENDING, INACTIVE
 }

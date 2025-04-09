@@ -5,33 +5,26 @@ import "google/protobuf/empty.proto";
 
 message BlockHeader {
   int32 version = 1;
-  string prevBlockHash = 2;
-  string merkleRoot = 3;
+  bytes prevBlockHash = 2;
+  bytes merkleRoot = 3;
   int64 timestamp = 4;
   uint32 bits = 5;
   uint64 nonce = 6;
+  uint64 height = 7;
 }
 
 message Block {
   BlockHeader header = 1;
-  int64 height = 2;
   string data = 3;
-  string hash = 5;
+  bytes hash = 5;
 }
 
 message GetBlockRequest {
-  int64 height = 1;
-}
-
-message NewBlockRequirementsResponse {
-  int64 next_block_height = 1;
-  string current_block_hash = 2;
-  int32 difficulty = 3;
+  uint64 height = 1;
 }
 
 service Blockchain {
   rpc GetBlock(GetBlockRequest) returns (Block) {}
   rpc GetHighestBlock(google.protobuf.Empty) returns (Block) {}
-  rpc GetNewBlockRequirement(google.protobuf.Empty) returns (NewBlockRequirementsResponse) {}
   rpc AddNewBlock(Block) returns (Block) {}
 }

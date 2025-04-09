@@ -1,9 +1,0 @@
-syntax = "proto3";
-package blockchain;
-option go_package = "./proto";
-
-import "proto/block.proto";
-
-service Node {
-  rpc RegisterNode(stream Block) returns (stream Block) {}
-}

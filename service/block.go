@@ -3,6 +3,7 @@ package service
 import (
 	pb "blockchain/proto"
 	"blockchain/utils"
+	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -10,50 +11,54 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
+var ZERO_HASH = make([]byte, 32, 32)
+
 type BlockchainServer struct {
 	pb.UnimplementedBlockchainServer
 
 	mu             *sync.RWMutex
 	blocks         []*pb.Block
-	requirement    pb.NewBlockRequirementsResponse
+	header         *pb.BlockHeader
 	beforeNewBlock func(context.Context, *pb.Block) error
 	afterNewBlock  func(context.Context, *pb.Block) error
 }
 
-func (s *BlockchainServer) SetRequirement(ctx context.Context, height int64, hash string, diff int32) *pb.NewBlockRequirementsResponse {
-	s.requirement = pb.NewBlockRequirementsResponse{
-		NextBlockHeight:  height,
-		CurrentBlockHash: hash,
-		Difficulty:       diff,
+func (s *BlockchainServer) SetNewBlockHeader(height uint64, hash []byte, diff uint32) *pb.BlockHeader {
+	if len(hash) == 0 {
+		hash = ZERO_HASH
 	}
-	return &s.requirement
+	s.header = &pb.BlockHeader{
+		Height:        height,
+		PrevBlockHash: hash,
+		Bits:          diff,
+	}
+	return s.header
 }
 
-func (s *BlockchainServer) GetNewBlockRequirement(ctx context.Context, _ *emptypb.Empty) (*pb.NewBlockRequirementsResponse, error) {
-	return &s.requirement, nil
+func (s *BlockchainServer) GetNewBlockHeader() *pb.BlockHeader {
+	return s.header
 }
 
 func (s *BlockchainServer) AddNewBlock(ctx context.Context, block *pb.Block) (*pb.Block, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
 	// Verify block height
-	if block.Height != int64(len(s.blocks)+1) {
+	if block.GetHeader().GetHeight() != uint64(len(s.blocks)+1) {
 		return nil, fmt.Errorf("invalid block height")
 	}
 
 	// Verify previous hash
 	if len(s.blocks) > 0 {
 		lastBlock := s.blocks[len(s.blocks)-1]
-		if block.Header.PrevBlockHash != lastBlock.Hash {
+		if !bytes.Equal(block.GetHeader().GetPrevBlockHash(), lastBlock.GetHash()) {
 			return nil, fmt.Errorf("invalid previous hash")
 		}
-	} else if block.Header.PrevBlockHash != "0000000000000000000000000000000000000000000000000000000000000000" {
+	} else if !bytes.Equal(block.Header.PrevBlockHash, ZERO_HASH) {
 		return nil, fmt.Errorf("invalid genesis block previous hash")
 	}
 
 	// Verify block hash meets difficulty requirement
-	if err := utils.ValidateBlock(block.Header, s.requirement.CurrentBlockHash, block.Hash); err != nil {
+	if err := utils.ValidateBlock(block, s.header); err != nil {
 		return nil, fmt.Errorf("block hash does not meet difficulty requirement: %w", err)
 	}
 	if s.beforeNewBlock != nil {
@@ -78,7 +83,7 @@ func (s *BlockchainServer) GetBlock(ctx context.Context, req *pb.GetBlockRequest
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if req.Height < 0 || int(req.Height) >= len(s.blocks) {
+	if req.Height >= uint64(len(s.blocks)) {
 		return nil, fmt.Errorf("block height %d not found", req.Height)
 	}
 
@@ -99,14 +104,11 @@ func (s *BlockchainServer) GetHighestBlock(context.Context, *emptypb.Empty) (*pb
 func NewBlockNode(events ...func(context.Context, *pb.Block) error) *BlockchainServer {
 	s := &BlockchainServer{
 		mu: &sync.RWMutex{},
-		requirement: pb.NewBlockRequirementsResponse{
-			Difficulty: -1,
-		},
 	}
-	if len(events) > 1 {
+	if len(events) > 0 {
 		s.beforeNewBlock = events[0]
 	}
-	if len(events) > 2 {
+	if len(events) > 1 {
 		s.afterNewBlock = events[1]
 	}
 	return s

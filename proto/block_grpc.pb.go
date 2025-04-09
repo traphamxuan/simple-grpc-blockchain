@@ -20,10 +20,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Blockchain_GetBlock_FullMethodName               = "/blockchain.Blockchain/GetBlock"
-	Blockchain_GetHighestBlock_FullMethodName        = "/blockchain.Blockchain/GetHighestBlock"
-	Blockchain_GetNewBlockRequirement_FullMethodName = "/blockchain.Blockchain/GetNewBlockRequirement"
-	Blockchain_AddNewBlock_FullMethodName            = "/blockchain.Blockchain/AddNewBlock"
+	Blockchain_GetBlock_FullMethodName        = "/blockchain.Blockchain/GetBlock"
+	Blockchain_GetHighestBlock_FullMethodName = "/blockchain.Blockchain/GetHighestBlock"
+	Blockchain_AddNewBlock_FullMethodName     = "/blockchain.Blockchain/AddNewBlock"
 )
 
 // BlockchainClient is the client API for Blockchain service.
@@ -32,7 +31,6 @@ const (
 type BlockchainClient interface {
 	GetBlock(ctx context.Context, in *GetBlockRequest, opts ...grpc.CallOption) (*Block, error)
 	GetHighestBlock(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*Block, error)
-	GetNewBlockRequirement(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*NewBlockRequirementsResponse, error)
 	AddNewBlock(ctx context.Context, in *Block, opts ...grpc.CallOption) (*Block, error)
 }
 
@@ -64,16 +62,6 @@ func (c *blockchainClient) GetHighestBlock(ctx context.Context, in *emptypb.Empt
 	return out, nil
 }
 
-func (c *blockchainClient) GetNewBlockRequirement(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*NewBlockRequirementsResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(NewBlockRequirementsResponse)
-	err := c.cc.Invoke(ctx, Blockchain_GetNewBlockRequirement_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *blockchainClient) AddNewBlock(ctx context.Context, in *Block, opts ...grpc.CallOption) (*Block, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Block)
@@ -90,7 +78,6 @@ func (c *blockchainClient) AddNewBlock(ctx context.Context, in *Block, opts ...g
 type BlockchainServer interface {
 	GetBlock(context.Context, *GetBlockRequest) (*Block, error)
 	GetHighestBlock(context.Context, *emptypb.Empty) (*Block, error)
-	GetNewBlockRequirement(context.Context, *emptypb.Empty) (*NewBlockRequirementsResponse, error)
 	AddNewBlock(context.Context, *Block) (*Block, error)
 	mustEmbedUnimplementedBlockchainServer()
 }
@@ -107,9 +94,6 @@ func (UnimplementedBlockchainServer) GetBlock(context.Context, *GetBlockRequest)
 }
 func (UnimplementedBlockchainServer) GetHighestBlock(context.Context, *emptypb.Empty) (*Block, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetHighestBlock not implemented")
-}
-func (UnimplementedBlockchainServer) GetNewBlockRequirement(context.Context, *emptypb.Empty) (*NewBlockRequirementsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetNewBlockRequirement not implemented")
 }
 func (UnimplementedBlockchainServer) AddNewBlock(context.Context, *Block) (*Block, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddNewBlock not implemented")
@@ -171,24 +155,6 @@ func _Blockchain_GetHighestBlock_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Blockchain_GetNewBlockRequirement_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(emptypb.Empty)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(BlockchainServer).GetNewBlockRequirement(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: Blockchain_GetNewBlockRequirement_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(BlockchainServer).GetNewBlockRequirement(ctx, req.(*emptypb.Empty))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _Blockchain_AddNewBlock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Block)
 	if err := dec(in); err != nil {
@@ -221,10 +187,6 @@ var Blockchain_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetHighestBlock",
 			Handler:    _Blockchain_GetHighestBlock_Handler,
-		},
-		{
-			MethodName: "GetNewBlockRequirement",
-			Handler:    _Blockchain_GetNewBlockRequirement_Handler,
 		},
 		{
 			MethodName: "AddNewBlock",

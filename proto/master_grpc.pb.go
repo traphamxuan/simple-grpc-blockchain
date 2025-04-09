@@ -19,8 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	Master_RegisterNode_FullMethodName                 = "/blockchain.Master/RegisterNode"
-	Master_RegisterNewBlockRequirements_FullMethodName = "/blockchain.Master/RegisterNewBlockRequirements"
+	Master_RegisterNode_FullMethodName           = "/blockchain.Master/RegisterNode"
+	Master_RegisterNewBlockHeader_FullMethodName = "/blockchain.Master/RegisterNewBlockHeader"
 )
 
 // MasterClient is the client API for Master service.
@@ -28,7 +28,7 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type MasterClient interface {
 	RegisterNode(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (grpc.ServerStreamingClient[NodeInfo], error)
-	RegisterNewBlockRequirements(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (grpc.ServerStreamingClient[NewBlockRequirementsResponse], error)
+	RegisterNewBlockHeader(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (grpc.ServerStreamingClient[BlockHeader], error)
 }
 
 type masterClient struct {
@@ -58,13 +58,13 @@ func (c *masterClient) RegisterNode(ctx context.Context, in *NodeInfo, opts ...g
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Master_RegisterNodeClient = grpc.ServerStreamingClient[NodeInfo]
 
-func (c *masterClient) RegisterNewBlockRequirements(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (grpc.ServerStreamingClient[NewBlockRequirementsResponse], error) {
+func (c *masterClient) RegisterNewBlockHeader(ctx context.Context, in *NodeInfo, opts ...grpc.CallOption) (grpc.ServerStreamingClient[BlockHeader], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &Master_ServiceDesc.Streams[1], Master_RegisterNewBlockRequirements_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &Master_ServiceDesc.Streams[1], Master_RegisterNewBlockHeader_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &grpc.GenericClientStream[NodeInfo, NewBlockRequirementsResponse]{ClientStream: stream}
+	x := &grpc.GenericClientStream[NodeInfo, BlockHeader]{ClientStream: stream}
 	if err := x.ClientStream.SendMsg(in); err != nil {
 		return nil, err
 	}
@@ -75,14 +75,14 @@ func (c *masterClient) RegisterNewBlockRequirements(ctx context.Context, in *Nod
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Master_RegisterNewBlockRequirementsClient = grpc.ServerStreamingClient[NewBlockRequirementsResponse]
+type Master_RegisterNewBlockHeaderClient = grpc.ServerStreamingClient[BlockHeader]
 
 // MasterServer is the server API for Master service.
 // All implementations must embed UnimplementedMasterServer
 // for forward compatibility.
 type MasterServer interface {
 	RegisterNode(*NodeInfo, grpc.ServerStreamingServer[NodeInfo]) error
-	RegisterNewBlockRequirements(*NodeInfo, grpc.ServerStreamingServer[NewBlockRequirementsResponse]) error
+	RegisterNewBlockHeader(*NodeInfo, grpc.ServerStreamingServer[BlockHeader]) error
 	mustEmbedUnimplementedMasterServer()
 }
 
@@ -96,8 +96,8 @@ type UnimplementedMasterServer struct{}
 func (UnimplementedMasterServer) RegisterNode(*NodeInfo, grpc.ServerStreamingServer[NodeInfo]) error {
 	return status.Errorf(codes.Unimplemented, "method RegisterNode not implemented")
 }
-func (UnimplementedMasterServer) RegisterNewBlockRequirements(*NodeInfo, grpc.ServerStreamingServer[NewBlockRequirementsResponse]) error {
-	return status.Errorf(codes.Unimplemented, "method RegisterNewBlockRequirements not implemented")
+func (UnimplementedMasterServer) RegisterNewBlockHeader(*NodeInfo, grpc.ServerStreamingServer[BlockHeader]) error {
+	return status.Errorf(codes.Unimplemented, "method RegisterNewBlockHeader not implemented")
 }
 func (UnimplementedMasterServer) mustEmbedUnimplementedMasterServer() {}
 func (UnimplementedMasterServer) testEmbeddedByValue()                {}
@@ -131,16 +131,16 @@ func _Master_RegisterNode_Handler(srv interface{}, stream grpc.ServerStream) err
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type Master_RegisterNodeServer = grpc.ServerStreamingServer[NodeInfo]
 
-func _Master_RegisterNewBlockRequirements_Handler(srv interface{}, stream grpc.ServerStream) error {
+func _Master_RegisterNewBlockHeader_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(NodeInfo)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}
-	return srv.(MasterServer).RegisterNewBlockRequirements(m, &grpc.GenericServerStream[NodeInfo, NewBlockRequirementsResponse]{ServerStream: stream})
+	return srv.(MasterServer).RegisterNewBlockHeader(m, &grpc.GenericServerStream[NodeInfo, BlockHeader]{ServerStream: stream})
 }
 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
-type Master_RegisterNewBlockRequirementsServer = grpc.ServerStreamingServer[NewBlockRequirementsResponse]
+type Master_RegisterNewBlockHeaderServer = grpc.ServerStreamingServer[BlockHeader]
 
 // Master_ServiceDesc is the grpc.ServiceDesc for Master service.
 // It's only intended for direct use with grpc.RegisterService,
@@ -156,8 +156,8 @@ var Master_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 		{
-			StreamName:    "RegisterNewBlockRequirements",
-			Handler:       _Master_RegisterNewBlockRequirements_Handler,
+			StreamName:    "RegisterNewBlockHeader",
+			Handler:       _Master_RegisterNewBlockHeader_Handler,
 			ServerStreams: true,
 		},
 	},

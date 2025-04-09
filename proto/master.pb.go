@@ -25,6 +25,7 @@ type NodeInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Host          string                 `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"` // IP address
 	Port          int32                  `protobuf:"varint,2,opt,name=port,proto3" json:"port,omitempty"`
+	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"` // ACTIVE, PENDING, INACTIVE
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -73,18 +74,26 @@ func (x *NodeInfo) GetPort() int32 {
 	return 0
 }
 
+func (x *NodeInfo) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
 var File_proto_master_proto protoreflect.FileDescriptor
 
 const file_proto_master_proto_rawDesc = "" +
 	"\n" +
 	"\x12proto/master.proto\x12\n" +
-	"blockchain\x1a\x11proto/block.proto\"2\n" +
+	"blockchain\x1a\x11proto/block.proto\"J\n" +
 	"\bNodeInfo\x12\x12\n" +
 	"\x04host\x18\x01 \x01(\tR\x04host\x12\x12\n" +
-	"\x04port\x18\x02 \x01(\x05R\x04port2\xac\x01\n" +
+	"\x04port\x18\x02 \x01(\x05R\x04port\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status2\x95\x01\n" +
 	"\x06Master\x12>\n" +
-	"\fRegisterNode\x12\x14.blockchain.NodeInfo\x1a\x14.blockchain.NodeInfo\"\x000\x01\x12b\n" +
-	"\x1cRegisterNewBlockRequirements\x12\x14.blockchain.NodeInfo\x1a(.blockchain.NewBlockRequirementsResponse\"\x000\x01B\tZ\a./protob\x06proto3"
+	"\fRegisterNode\x12\x14.blockchain.NodeInfo\x1a\x14.blockchain.NodeInfo\"\x000\x01\x12K\n" +
+	"\x16RegisterNewBlockHeader\x12\x14.blockchain.NodeInfo\x1a\x17.blockchain.BlockHeader\"\x000\x01B\tZ\a./protob\x06proto3"
 
 var (
 	file_proto_master_proto_rawDescOnce sync.Once
@@ -100,14 +109,14 @@ func file_proto_master_proto_rawDescGZIP() []byte {
 
 var file_proto_master_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_proto_master_proto_goTypes = []any{
-	(*NodeInfo)(nil),                     // 0: blockchain.NodeInfo
-	(*NewBlockRequirementsResponse)(nil), // 1: blockchain.NewBlockRequirementsResponse
+	(*NodeInfo)(nil),    // 0: blockchain.NodeInfo
+	(*BlockHeader)(nil), // 1: blockchain.BlockHeader
 }
 var file_proto_master_proto_depIdxs = []int32{
 	0, // 0: blockchain.Master.RegisterNode:input_type -> blockchain.NodeInfo
-	0, // 1: blockchain.Master.RegisterNewBlockRequirements:input_type -> blockchain.NodeInfo
+	0, // 1: blockchain.Master.RegisterNewBlockHeader:input_type -> blockchain.NodeInfo
 	0, // 2: blockchain.Master.RegisterNode:output_type -> blockchain.NodeInfo
-	1, // 3: blockchain.Master.RegisterNewBlockRequirements:output_type -> blockchain.NewBlockRequirementsResponse
+	1, // 3: blockchain.Master.RegisterNewBlockHeader:output_type -> blockchain.BlockHeader
 	2, // [2:4] is the sub-list for method output_type
 	0, // [0:2] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name

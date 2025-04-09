@@ -25,11 +25,12 @@ const (
 type BlockHeader struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Version       int32                  `protobuf:"varint,1,opt,name=version,proto3" json:"version,omitempty"`
-	PrevBlockHash string                 `protobuf:"bytes,2,opt,name=prevBlockHash,proto3" json:"prevBlockHash,omitempty"`
-	MerkleRoot    string                 `protobuf:"bytes,3,opt,name=merkleRoot,proto3" json:"merkleRoot,omitempty"`
+	PrevBlockHash []byte                 `protobuf:"bytes,2,opt,name=prevBlockHash,proto3" json:"prevBlockHash,omitempty"`
+	MerkleRoot    []byte                 `protobuf:"bytes,3,opt,name=merkleRoot,proto3" json:"merkleRoot,omitempty"`
 	Timestamp     int64                  `protobuf:"varint,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	Bits          uint32                 `protobuf:"varint,5,opt,name=bits,proto3" json:"bits,omitempty"`
 	Nonce         uint64                 `protobuf:"varint,6,opt,name=nonce,proto3" json:"nonce,omitempty"`
+	Height        uint64                 `protobuf:"varint,7,opt,name=height,proto3" json:"height,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -71,18 +72,18 @@ func (x *BlockHeader) GetVersion() int32 {
 	return 0
 }
 
-func (x *BlockHeader) GetPrevBlockHash() string {
+func (x *BlockHeader) GetPrevBlockHash() []byte {
 	if x != nil {
 		return x.PrevBlockHash
 	}
-	return ""
+	return nil
 }
 
-func (x *BlockHeader) GetMerkleRoot() string {
+func (x *BlockHeader) GetMerkleRoot() []byte {
 	if x != nil {
 		return x.MerkleRoot
 	}
-	return ""
+	return nil
 }
 
 func (x *BlockHeader) GetTimestamp() int64 {
@@ -106,12 +107,18 @@ func (x *BlockHeader) GetNonce() uint64 {
 	return 0
 }
 
+func (x *BlockHeader) GetHeight() uint64 {
+	if x != nil {
+		return x.Height
+	}
+	return 0
+}
+
 type Block struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Header        *BlockHeader           `protobuf:"bytes,1,opt,name=header,proto3" json:"header,omitempty"`
-	Height        int64                  `protobuf:"varint,2,opt,name=height,proto3" json:"height,omitempty"`
 	Data          string                 `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
-	Hash          string                 `protobuf:"bytes,5,opt,name=hash,proto3" json:"hash,omitempty"`
+	Hash          []byte                 `protobuf:"bytes,5,opt,name=hash,proto3" json:"hash,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -153,13 +160,6 @@ func (x *Block) GetHeader() *BlockHeader {
 	return nil
 }
 
-func (x *Block) GetHeight() int64 {
-	if x != nil {
-		return x.Height
-	}
-	return 0
-}
-
 func (x *Block) GetData() string {
 	if x != nil {
 		return x.Data
@@ -167,16 +167,16 @@ func (x *Block) GetData() string {
 	return ""
 }
 
-func (x *Block) GetHash() string {
+func (x *Block) GetHash() []byte {
 	if x != nil {
 		return x.Hash
 	}
-	return ""
+	return nil
 }
 
 type GetBlockRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Height        int64                  `protobuf:"varint,1,opt,name=height,proto3" json:"height,omitempty"`
+	Height        uint64                 `protobuf:"varint,1,opt,name=height,proto3" json:"height,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -211,69 +211,9 @@ func (*GetBlockRequest) Descriptor() ([]byte, []int) {
 	return file_proto_block_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *GetBlockRequest) GetHeight() int64 {
+func (x *GetBlockRequest) GetHeight() uint64 {
 	if x != nil {
 		return x.Height
-	}
-	return 0
-}
-
-type NewBlockRequirementsResponse struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	NextBlockHeight  int64                  `protobuf:"varint,1,opt,name=next_block_height,json=nextBlockHeight,proto3" json:"next_block_height,omitempty"`
-	CurrentBlockHash string                 `protobuf:"bytes,2,opt,name=current_block_hash,json=currentBlockHash,proto3" json:"current_block_hash,omitempty"`
-	Difficulty       int32                  `protobuf:"varint,3,opt,name=difficulty,proto3" json:"difficulty,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
-}
-
-func (x *NewBlockRequirementsResponse) Reset() {
-	*x = NewBlockRequirementsResponse{}
-	mi := &file_proto_block_proto_msgTypes[3]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *NewBlockRequirementsResponse) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*NewBlockRequirementsResponse) ProtoMessage() {}
-
-func (x *NewBlockRequirementsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_block_proto_msgTypes[3]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use NewBlockRequirementsResponse.ProtoReflect.Descriptor instead.
-func (*NewBlockRequirementsResponse) Descriptor() ([]byte, []int) {
-	return file_proto_block_proto_rawDescGZIP(), []int{3}
-}
-
-func (x *NewBlockRequirementsResponse) GetNextBlockHeight() int64 {
-	if x != nil {
-		return x.NextBlockHeight
-	}
-	return 0
-}
-
-func (x *NewBlockRequirementsResponse) GetCurrentBlockHash() string {
-	if x != nil {
-		return x.CurrentBlockHash
-	}
-	return ""
-}
-
-func (x *NewBlockRequirementsResponse) GetDifficulty() int32 {
-	if x != nil {
-		return x.Difficulty
 	}
 	return 0
 }
@@ -283,34 +223,27 @@ var File_proto_block_proto protoreflect.FileDescriptor
 const file_proto_block_proto_rawDesc = "" +
 	"\n" +
 	"\x11proto/block.proto\x12\n" +
-	"blockchain\x1a\x1bgoogle/protobuf/empty.proto\"\xb5\x01\n" +
+	"blockchain\x1a\x1bgoogle/protobuf/empty.proto\"\xcd\x01\n" +
 	"\vBlockHeader\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\x05R\aversion\x12$\n" +
-	"\rprevBlockHash\x18\x02 \x01(\tR\rprevBlockHash\x12\x1e\n" +
+	"\rprevBlockHash\x18\x02 \x01(\fR\rprevBlockHash\x12\x1e\n" +
 	"\n" +
-	"merkleRoot\x18\x03 \x01(\tR\n" +
+	"merkleRoot\x18\x03 \x01(\fR\n" +
 	"merkleRoot\x12\x1c\n" +
 	"\ttimestamp\x18\x04 \x01(\x03R\ttimestamp\x12\x12\n" +
 	"\x04bits\x18\x05 \x01(\rR\x04bits\x12\x14\n" +
-	"\x05nonce\x18\x06 \x01(\x04R\x05nonce\"x\n" +
+	"\x05nonce\x18\x06 \x01(\x04R\x05nonce\x12\x16\n" +
+	"\x06height\x18\a \x01(\x04R\x06height\"`\n" +
 	"\x05Block\x12/\n" +
-	"\x06header\x18\x01 \x01(\v2\x17.blockchain.BlockHeaderR\x06header\x12\x16\n" +
-	"\x06height\x18\x02 \x01(\x03R\x06height\x12\x12\n" +
+	"\x06header\x18\x01 \x01(\v2\x17.blockchain.BlockHeaderR\x06header\x12\x12\n" +
 	"\x04data\x18\x03 \x01(\tR\x04data\x12\x12\n" +
-	"\x04hash\x18\x05 \x01(\tR\x04hash\")\n" +
+	"\x04hash\x18\x05 \x01(\fR\x04hash\")\n" +
 	"\x0fGetBlockRequest\x12\x16\n" +
-	"\x06height\x18\x01 \x01(\x03R\x06height\"\x98\x01\n" +
-	"\x1cNewBlockRequirementsResponse\x12*\n" +
-	"\x11next_block_height\x18\x01 \x01(\x03R\x0fnextBlockHeight\x12,\n" +
-	"\x12current_block_hash\x18\x02 \x01(\tR\x10currentBlockHash\x12\x1e\n" +
-	"\n" +
-	"difficulty\x18\x03 \x01(\x05R\n" +
-	"difficulty2\x9f\x02\n" +
+	"\x06height\x18\x01 \x01(\x04R\x06height2\xc1\x01\n" +
 	"\n" +
 	"Blockchain\x12<\n" +
 	"\bGetBlock\x12\x1b.blockchain.GetBlockRequest\x1a\x11.blockchain.Block\"\x00\x12>\n" +
-	"\x0fGetHighestBlock\x12\x16.google.protobuf.Empty\x1a\x11.blockchain.Block\"\x00\x12\\\n" +
-	"\x16GetNewBlockRequirement\x12\x16.google.protobuf.Empty\x1a(.blockchain.NewBlockRequirementsResponse\"\x00\x125\n" +
+	"\x0fGetHighestBlock\x12\x16.google.protobuf.Empty\x1a\x11.blockchain.Block\"\x00\x125\n" +
 	"\vAddNewBlock\x12\x11.blockchain.Block\x1a\x11.blockchain.Block\"\x00B\tZ\a./protob\x06proto3"
 
 var (
@@ -325,26 +258,23 @@ func file_proto_block_proto_rawDescGZIP() []byte {
 	return file_proto_block_proto_rawDescData
 }
 
-var file_proto_block_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_proto_block_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_proto_block_proto_goTypes = []any{
-	(*BlockHeader)(nil),                  // 0: blockchain.BlockHeader
-	(*Block)(nil),                        // 1: blockchain.Block
-	(*GetBlockRequest)(nil),              // 2: blockchain.GetBlockRequest
-	(*NewBlockRequirementsResponse)(nil), // 3: blockchain.NewBlockRequirementsResponse
-	(*emptypb.Empty)(nil),                // 4: google.protobuf.Empty
+	(*BlockHeader)(nil),     // 0: blockchain.BlockHeader
+	(*Block)(nil),           // 1: blockchain.Block
+	(*GetBlockRequest)(nil), // 2: blockchain.GetBlockRequest
+	(*emptypb.Empty)(nil),   // 3: google.protobuf.Empty
 }
 var file_proto_block_proto_depIdxs = []int32{
 	0, // 0: blockchain.Block.header:type_name -> blockchain.BlockHeader
 	2, // 1: blockchain.Blockchain.GetBlock:input_type -> blockchain.GetBlockRequest
-	4, // 2: blockchain.Blockchain.GetHighestBlock:input_type -> google.protobuf.Empty
-	4, // 3: blockchain.Blockchain.GetNewBlockRequirement:input_type -> google.protobuf.Empty
-	1, // 4: blockchain.Blockchain.AddNewBlock:input_type -> blockchain.Block
-	1, // 5: blockchain.Blockchain.GetBlock:output_type -> blockchain.Block
-	1, // 6: blockchain.Blockchain.GetHighestBlock:output_type -> blockchain.Block
-	3, // 7: blockchain.Blockchain.GetNewBlockRequirement:output_type -> blockchain.NewBlockRequirementsResponse
-	1, // 8: blockchain.Blockchain.AddNewBlock:output_type -> blockchain.Block
-	5, // [5:9] is the sub-list for method output_type
-	1, // [1:5] is the sub-list for method input_type
+	3, // 2: blockchain.Blockchain.GetHighestBlock:input_type -> google.protobuf.Empty
+	1, // 3: blockchain.Blockchain.AddNewBlock:input_type -> blockchain.Block
+	1, // 4: blockchain.Blockchain.GetBlock:output_type -> blockchain.Block
+	1, // 5: blockchain.Blockchain.GetHighestBlock:output_type -> blockchain.Block
+	1, // 6: blockchain.Blockchain.AddNewBlock:output_type -> blockchain.Block
+	4, // [4:7] is the sub-list for method output_type
+	1, // [1:4] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
 	1, // [1:1] is the sub-list for extension extendee
 	0, // [0:1] is the sub-list for field type_name
@@ -361,7 +291,7 @@ func file_proto_block_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_block_proto_rawDesc), len(file_proto_block_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   4,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
