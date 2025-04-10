@@ -46,20 +46,22 @@ func (s *MasterServer) Start(ctx context.Context, port int32) error {
 	server := grpc.NewServer()
 	masterServer := NewMasterServer()
 	pb.RegisterMasterServer(server, masterServer)
-	blockchainServer := NewBlockNode(nil, masterServer.ProcessAfterNewBlock)
+	blockchainServer := NewBlockNode(masterServer.ProcessAfterNewBlock)
 	pb.RegisterBlockchainServer(server, blockchainServer)
 
 	masterServer.SetBlockchainService(blockchainServer)
 
 	blk, _ := blockchainServer.GetHighestBlock(ctx, nil)
-	bits := blk.GetHeader().GetBits()
-	if bits == 0 {
-		bits = DEFAULT_DIFFICULTY
+	if blk == nil {
+		blk = &pb.Block{
+			Header: &pb.BlockHeader{Height: 0, Bits: DEFAULT_DIFFICULTY},
+			Hash:   ZERO_HASH,
+		}
 	}
 	blockchainServer.SetNewBlockHeader(
 		blk.GetHeader().GetHeight()+1,
 		blk.GetHash(),
-		bits,
+		blk.GetHeader().GetBits(),
 	)
 
 	log.Printf("Master server listening at %v", lis.Addr())
@@ -81,7 +83,6 @@ func (s *MasterServer) RegisterNode(req *pb.NodeInfo, stream pb.Master_RegisterN
 
 	s.mNodeInfo[nodeKey] = req
 	s.mNodeStream[nodeKey] = stream
-	s.mu.Unlock()
 
 	// Send list of nodes
 	for key, nodeInfo := range s.mNodeInfo {
@@ -100,11 +101,12 @@ func (s *MasterServer) RegisterNode(req *pb.NodeInfo, stream pb.Master_RegisterN
 		}
 		nodeStream.Send(req)
 	}
+	s.mu.Unlock()
 
+END_OF_NODE_LIFE:
 	// Keep the stream open and wait for context cancellation
 	<-stream.Context().Done()
 
-END_OF_NODE_LIFE:
 	// Clean up when stream is closed
 	fmt.Println("Remove node at ", nodeKey)
 	s.mu.Lock()
@@ -159,7 +161,7 @@ func (s *MasterServer) notifyNodesOfNewRequirements(header *pb.BlockHeader) {
 		go func(key string, stream pb.Master_RegisterNewBlockHeaderServer) {
 			defer wg.Done()
 			if err := stream.Send(header); err != nil {
-				fmt.Printf("Failed to notify node %s of new requirements: %v", key, err)
+				fmt.Printf("Failed to notify node %s of new requirements: %v\n", key, err)
 			}
 		}(key, stream)
 	}
@@ -175,13 +177,14 @@ func (s *MasterServer) ProcessAfterNewBlock(ctx context.Context, block *pb.Block
 	} else if timeDiff > time.Minute {
 		bits--
 	}
-	fmt.Printf("New difficulty: %d :", bits)
-	requirement := s.blockchainServer.SetNewBlockHeader(
+	header := s.blockchainServer.SetNewBlockHeader(
 		block.GetHeader().GetHeight()+1,
 		block.GetHash(),
 		bits,
 	)
-	go s.notifyNodesOfNewRequirements(requirement)
+	fmt.Printf("New difficulty: %d, height: %d :", header.GetBits(), header.GetHeight())
+	go s.notifyNodesOfNewRequirements(header)
 	s.lastNewBlockAt = time.Now()
+
 	return nil
 }

@@ -11,21 +11,33 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-var ZERO_HASH = make([]byte, 32, 32)
+var ZERO_HASH = make([]byte, 32)
+
+type PreBlock struct {
+	block *pb.Block
+	vote  int
+}
 
 type BlockchainServer struct {
 	pb.UnimplementedBlockchainServer
 
-	mu             *sync.RWMutex
-	blocks         []*pb.Block
-	header         *pb.BlockHeader
-	beforeNewBlock func(context.Context, *pb.Block) error
-	afterNewBlock  func(context.Context, *pb.Block) error
+	mu            *sync.RWMutex
+	blocks        []*pb.Block
+	preBlocks     []PreBlock
+	header        *pb.BlockHeader
+	afterNewBlock func(context.Context, *pb.Block) error
 }
 
 func (s *BlockchainServer) SetNewBlockHeader(height uint64, hash []byte, diff uint32) *pb.BlockHeader {
 	if len(hash) == 0 {
 		hash = ZERO_HASH
+	}
+	for _, preBlk := range s.preBlocks {
+		if bytes.Equal(preBlk.block.GetHash(), hash) {
+			s.blocks = append(s.blocks, preBlk.block)
+			s.preBlocks = nil
+			break
+		}
 	}
 	s.header = &pb.BlockHeader{
 		Height:        height,
@@ -36,47 +48,95 @@ func (s *BlockchainServer) SetNewBlockHeader(height uint64, hash []byte, diff ui
 }
 
 func (s *BlockchainServer) GetNewBlockHeader() *pb.BlockHeader {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return s.header
 }
 
+func (s *BlockchainServer) GetPreBlocks() []PreBlock {
+	return s.preBlocks
+}
+
 func (s *BlockchainServer) AddNewBlock(ctx context.Context, block *pb.Block) (*pb.Block, error) {
+	// Verify block height
+	s.mu.RLock()
+	if err := s.validateNewBlock(block); err != nil {
+		s.mu.RUnlock()
+		return nil, err
+	}
+	s.mu.RUnlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	// Verify block height
-	if block.GetHeader().GetHeight() != uint64(len(s.blocks)+1) {
-		return nil, fmt.Errorf("invalid block height")
+
+	if err := s.validateNewBlock(block); err != nil {
+		return nil, err
 	}
 
-	// Verify previous hash
-	if len(s.blocks) > 0 {
-		lastBlock := s.blocks[len(s.blocks)-1]
-		if !bytes.Equal(block.GetHeader().GetPrevBlockHash(), lastBlock.GetHash()) {
-			return nil, fmt.Errorf("invalid previous hash")
+	if block.GetHeader().GetHeight() >= uint64(len(s.blocks)) {
+		isRun := false
+		for _, preBlk := range s.preBlocks {
+			if bytes.Equal(preBlk.block.GetHash(), block.GetHash()) {
+				preBlk.vote++
+				isRun = true
+				break
+			}
 		}
-	} else if !bytes.Equal(block.Header.PrevBlockHash, ZERO_HASH) {
-		return nil, fmt.Errorf("invalid genesis block previous hash")
+		if !isRun {
+			s.preBlocks = append(s.preBlocks, PreBlock{block, 1})
+		}
+	}
+
+	if s.afterNewBlock != nil {
+		s.mu.Unlock()
+		if err := s.afterNewBlock(ctx, block); err != nil {
+			fmt.Println("warning: Skip failure in process after new block")
+		}
+		s.mu.Lock()
+	}
+
+	return block, nil
+}
+
+func (s *BlockchainServer) addNewBlock(block *pb.Block) (*pb.Block, error) {
+	s.mu.RLock()
+	if err := s.validateNewBlock(block); err != nil {
+		s.mu.RUnlock()
+		return nil, err
+	}
+	s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.validateNewBlock(block); err != nil {
+		return nil, err
+	}
+
+	if block.GetHeader().GetHeight() >= uint64(len(s.blocks)) {
+		isRun := false
+		for _, preBlk := range s.preBlocks {
+			if bytes.Equal(preBlk.block.GetHash(), block.GetHash()) {
+				preBlk.vote++
+				isRun = true
+				break
+			}
+		}
+		if !isRun {
+			s.preBlocks = append(s.preBlocks, PreBlock{block, 1})
+		}
+	}
+	return block, nil
+}
+
+func (s *BlockchainServer) validateNewBlock(block *pb.Block) error {
+	if block.GetHeader().GetHeight() != s.header.GetHeight() {
+		return fmt.Errorf("invalid height: %d vs %d", block.GetHeader().GetHeight(), s.header.GetHeight())
 	}
 
 	// Verify block hash meets difficulty requirement
 	if err := utils.ValidateBlock(block, s.header); err != nil {
-		return nil, fmt.Errorf("block hash does not meet difficulty requirement: %w", err)
+		return fmt.Errorf("block hash does not meet difficulty requirement: %w", err)
 	}
-	if s.beforeNewBlock != nil {
-		if err := s.beforeNewBlock(ctx, block); err != nil {
-			return nil, err
-		}
-	}
-
-	// Add block to chain
-	s.blocks = append(s.blocks, block)
-
-	if s.afterNewBlock != nil {
-		if err := s.afterNewBlock(ctx, block); err != nil {
-			return nil, err
-		}
-	}
-
-	return block, nil
+	return nil
 }
 
 func (s *BlockchainServer) GetBlock(ctx context.Context, req *pb.GetBlockRequest) (*pb.Block, error) {
@@ -101,15 +161,10 @@ func (s *BlockchainServer) GetHighestBlock(context.Context, *emptypb.Empty) (*pb
 	return s.blocks[len(s.blocks)-1], nil
 }
 
-func NewBlockNode(events ...func(context.Context, *pb.Block) error) *BlockchainServer {
+func NewBlockNode(afterNewBlock func(context.Context, *pb.Block) error) *BlockchainServer {
 	s := &BlockchainServer{
 		mu: &sync.RWMutex{},
 	}
-	if len(events) > 0 {
-		s.beforeNewBlock = events[0]
-	}
-	if len(events) > 1 {
-		s.afterNewBlock = events[1]
-	}
+	s.afterNewBlock = afterNewBlock
 	return s
 }

@@ -4,9 +4,9 @@ import (
 	pb "blockchain/proto"
 	"blockchain/utils"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"log"
-	"math/rand"
 	"net"
 	"sync"
 	"time"
@@ -17,17 +17,18 @@ import (
 )
 
 type Miner struct {
-	master        pb.MasterClient
-	blockServer   *BlockchainServer
-	mMiners       map[string]pb.BlockchainClient
-	mGrpcConn     map[string]*grpc.ClientConn
-	nodeInfo      pb.NodeInfo
-	mu            *sync.RWMutex
-	cancelMinning context.CancelFunc
-	random        rand.Source64
+	master         pb.MasterClient
+	blockServer    *BlockchainServer
+	mMiners        map[string]pb.BlockchainClient
+	mGrpcConn      map[string]*grpc.ClientConn
+	nodeInfo       pb.NodeInfo
+	mu             *sync.RWMutex
+	cancelMu       *sync.Mutex
+	mCancelMinning map[uint64]context.CancelFunc
+	effort         int
 }
 
-func NewMiner(masterHost string, masterPort int32, host string, port int32) (*Miner, error) {
+func NewMiner(masterHost string, masterPort int32, host string, port int32, eff int) (*Miner, error) {
 	// Connect to master server
 	masterKey := fmt.Sprintf("%s:%d", masterHost, masterPort)
 	conn, err := grpc.NewClient(masterKey, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -40,10 +41,14 @@ func NewMiner(masterHost string, masterPort int32, host string, port int32) (*Mi
 		mMiners: map[string]pb.BlockchainClient{
 			masterKey: pb.NewBlockchainClient(conn),
 		},
-		mGrpcConn: make(map[string]*grpc.ClientConn),
-		nodeInfo:  pb.NodeInfo{Host: host, Port: port, Status: "ACTIVE"},
-		mu:        &sync.RWMutex{},
-		random:    rand.New(rand.NewSource(time.Now().UnixMicro())),
+		mGrpcConn: map[string]*grpc.ClientConn{
+			masterKey: conn,
+		},
+		mCancelMinning: make(map[uint64]context.CancelFunc),
+		nodeInfo:       pb.NodeInfo{Host: host, Port: port, Status: "ACTIVE"},
+		mu:             &sync.RWMutex{},
+		cancelMu:       &sync.Mutex{},
+		effort:         eff,
 	}, nil
 }
 
@@ -76,10 +81,10 @@ func (s *Miner) Start(ctx context.Context) (err error) {
 
 		server := grpc.NewServer()
 
-		s.blockServer = NewBlockNode(nil, s.OnNewBlock)
+		s.blockServer = NewBlockNode(nil)
 		pb.RegisterBlockchainServer(server, s.blockServer)
 
-		log.Printf("Master server listening at %v", lis.Addr())
+		log.Printf("Miner server listening at %v", lis.Addr())
 		chErr <- server.Serve(lis)
 	}()
 
@@ -88,7 +93,7 @@ func (s *Miner) Start(ctx context.Context) (err error) {
 		return err
 	case err = <-s.listenOnNewMiner(ctx):
 		return err
-	case err = <-s.listenOnNewBlockRequirement(ctx):
+	case err = <-s.listenOnNewBlockHeader(ctx):
 		return err
 	case <-ctx.Done():
 		return ctx.Err()
@@ -112,7 +117,7 @@ func (s *Miner) listenOnNewMiner(ctx context.Context) chan error {
 		}
 		for err == nil {
 			err = stream.RecvMsg(&nodeInfo)
-			fmt.Printf("New event from %s:%d\n", nodeInfo.GetHost(), nodeInfo.GetPort())
+			fmt.Printf("New miner from %s:%d:%s\n", nodeInfo.GetHost(), nodeInfo.GetPort(), nodeInfo.GetStatus())
 			if err != nil {
 				continue
 			}
@@ -124,18 +129,18 @@ func (s *Miner) listenOnNewMiner(ctx context.Context) chan error {
 						fmt.Println("failed to connect to " + minerKey)
 						continue
 					}
-					fmt.Println("Add miner ", minerKey)
 					s.mu.Lock()
 					s.mMiners[minerKey] = pb.NewBlockchainClient(conn)
 					s.mGrpcConn[minerKey] = conn
 					s.mu.Unlock()
+					fmt.Println("Add miner ", minerKey)
 				} else {
-					fmt.Println("Remove miner ", minerKey)
 					s.mu.Lock()
 					conn := s.mGrpcConn[minerKey]
 					delete(s.mGrpcConn, minerKey)
 					delete(s.mMiners, minerKey)
 					s.mu.Unlock()
+					fmt.Println("Remove miner ", minerKey)
 					if conn != nil {
 						conn.Close()
 					}
@@ -147,13 +152,14 @@ func (s *Miner) listenOnNewMiner(ctx context.Context) chan error {
 	return chErr
 }
 
-func (s *Miner) listenOnNewBlockRequirement(ctx context.Context) chan error {
+func (s *Miner) listenOnNewBlockHeader(ctx context.Context) chan error {
 	chErr := make(chan error)
 	go func() {
 		var (
-			stream pb.Master_RegisterNewBlockHeaderClient
-			header pb.BlockHeader
-			err    error
+			stream         pb.Master_RegisterNewBlockHeaderClient
+			header         pb.BlockHeader
+			err            error
+			previousHeight uint64
 		)
 		if err := backoff.Retry(func() error {
 			stream, err = s.master.RegisterNewBlockHeader(ctx, &s.nodeInfo)
@@ -164,19 +170,21 @@ func (s *Miner) listenOnNewBlockRequirement(ctx context.Context) chan error {
 		}
 		for err == nil {
 			err = stream.RecvMsg(&header)
-			fmt.Printf("new requirement from master: NextHeigth: %d, Difficulty: %d\n", header.Height, header.Bits)
+			fmt.Printf("new Header from master: NextHeigth: %d, Difficulty: %d, hash: %s\n", header.Height, header.Bits, hex.EncodeToString(header.GetPrevBlockHash()))
 			if err != nil {
 				continue
 			}
-			s.stopMining()
 			if header.Bits > 0 {
-				ctx, cancel := context.WithCancel(ctx)
-				s.cancelMinning = cancel
-				s.blockServer.SetNewBlockHeader(
+				head := s.blockServer.SetNewBlockHeader(
 					header.GetHeight(),
 					header.GetPrevBlockHash(),
 					header.GetBits())
-				go s.startMining(ctx, &header)
+				previousHeight = head.GetHeight()
+				ctx, cancel := context.WithCancel(ctx)
+				s.mu.Lock()
+				s.mCancelMinning[previousHeight] = cancel
+				s.mu.Unlock()
+				go s.startMining(ctx, head)
 			}
 		}
 		chErr <- nil
@@ -184,40 +192,50 @@ func (s *Miner) listenOnNewBlockRequirement(ctx context.Context) chan error {
 	return chErr
 }
 
-func (s *Miner) OnNewBlock(ctx context.Context, blk *pb.Block) error {
-	_, err := s.blockServer.AddNewBlock(ctx, blk)
-	if err != nil {
-		return err
-	}
-	if s.cancelMinning != nil {
-		s.cancelMinning()
-	}
-	return nil
-}
-
-func (s *Miner) startMining(ctx context.Context, requirement *pb.BlockHeader) {
-	for {
-		if requirement == nil || requirement.Bits == 0 {
+func (s *Miner) startMining(ctx context.Context, header *pb.BlockHeader) {
+	defer fmt.Println("End of mining", header.GetHeight())
+	var (
+		startAt time.Time = time.Now()
+		counter int64
+	)
+	for ctx.Err() == nil && s.blockServer.GetNewBlockHeader().GetHeight() == header.GetHeight() {
+		if header == nil || header.Bits == 0 {
 			break
 		}
 
-		block := s.mineBlock(ctx, requirement)
+		block := s.mineBlock(header)
 		if block != nil {
-			for _, stream := range s.mMiners {
-				go func() {
+			block, err := s.blockServer.addNewBlock(block)
+			if err != nil {
+				continue
+			}
+			ctx = context.WithoutCancel(ctx)
+			for key, stream := range s.mMiners {
+				fmt.Printf("Try to send new block to %s\n", key)
+				go func(ctx context.Context, key string, stream pb.BlockchainClient) {
 					_, err := stream.AddNewBlock(ctx, block)
 					if err != nil {
 						// remove if error is not connected
+						fmt.Printf("failed to send to %s: %v\n", key, err)
+						return
 					}
-				}()
+				}(ctx, key, stream)
 			}
-			log.Printf("Successfully submitted block %d", block.GetHeader().GetHeight())
-			break
+			log.Printf("Submitting block %d", block.GetHeader().GetHeight())
+		}
+		if counter > 1000000 {
+			now := time.Now()
+			duration := now.Sub(startAt)
+			idle := duration * time.Duration(100-s.effort) / time.Duration(s.effort)
+			// fmt.Printf("Height: %d, nonce: %d, hash: %s\n", header.GetHeight(), nonce, hex.EncodeToString(hash))
+			time.Sleep(idle)
+			startAt = now
+			counter = 0
 		}
 	}
 }
 
-func (s *Miner) mineBlock(ctx context.Context, header *pb.BlockHeader) *pb.Block {
+func (s *Miner) mineBlock(header *pb.BlockHeader) *pb.Block {
 	// Create a new block
 	block := &pb.Block{
 		Header: &pb.BlockHeader{
@@ -228,25 +246,14 @@ func (s *Miner) mineBlock(ctx context.Context, header *pb.BlockHeader) *pb.Block
 		},
 		Data: "Tra pham",
 	}
-	// Try to find a nonce that satisfies the difficulty
-	for nonce := uint64(0); ctx.Err() == nil; nonce = s.random.Uint64() {
-		// if nonce%1000000 == 0 {
-		// 	fmt.Printf("Finding new block: nonce=%d\n", nonce)
-		// }
-		block.Header.Nonce = nonce
-		hash, err := utils.CalculateBlockHash(block)
-		if err != nil {
-			return nil
-		}
-		block.Hash = hash
-		if err := utils.ValidateBlock(block, header); err == nil {
-			return block
-		}
+
+	nonce, _ := utils.RandomUint64()
+	block.Header.Nonce = nonce
+	hash, err := utils.CalculateBlockHash(block)
+	if err != nil {
+		return nil
 	}
+	block.Hash = hash
 
-	return nil
-}
-
-func (s *Miner) stopMining() {
-
+	return block
 }
