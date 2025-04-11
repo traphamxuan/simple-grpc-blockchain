@@ -18,6 +18,7 @@ func main() {
 	nodePort := flag.Int("p", 50052, "Port of node to listen")
 	nodeHost := flag.String("h", "localhost", "Host address of node")
 	effort := flag.Int("f", 70, "Effort (%) of CPU to mine the block")
+	sig := flag.String("s", "lab2", "signature stored in the block")
 
 	if *effort > 100 {
 		*effort = 100
@@ -29,7 +30,7 @@ func main() {
 
 	if masterPort != nil && *masterPort > 0 {
 		fmt.Println("Run as miner node")
-		minerServer, err := service.NewMiner(*masterHost, int32(*masterPort), *nodeHost, int32(*nodePort), *effort)
+		minerServer, err := service.NewMiner(*masterHost, int32(*masterPort), *nodeHost, int32(*nodePort), *effort, *sig)
 		if err != nil {
 			panic(err)
 		}

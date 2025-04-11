@@ -26,9 +26,10 @@ type Miner struct {
 	cancelMu       *sync.Mutex
 	mCancelMinning map[uint64]context.CancelFunc
 	effort         int
+	signature      string
 }
 
-func NewMiner(masterHost string, masterPort int32, host string, port int32, eff int) (*Miner, error) {
+func NewMiner(masterHost string, masterPort int32, host string, port int32, eff int, signature string) (*Miner, error) {
 	// Connect to master server
 	masterKey := fmt.Sprintf("%s:%d", masterHost, masterPort)
 	conn, err := grpc.NewClient(masterKey, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -49,6 +50,7 @@ func NewMiner(masterHost string, masterPort int32, host string, port int32, eff 
 		mu:             &sync.RWMutex{},
 		cancelMu:       &sync.Mutex{},
 		effort:         eff,
+		signature:      signature,
 	}, nil
 }
 
@@ -244,7 +246,7 @@ func (s *Miner) mineBlock(header *pb.BlockHeader) *pb.Block {
 			Height:        header.GetHeight(),
 			Timestamp:     time.Now().Unix(),
 		},
-		Data: "Tra pham",
+		Data: s.signature,
 	}
 
 	nonce, _ := utils.RandomUint64()

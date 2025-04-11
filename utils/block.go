@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
+	"os"
 )
 
 // validateBlock checks the previous hash and difficulty
@@ -114,4 +116,24 @@ func compareBits(calculatedHash, preBlkHash []byte, difficulty uint32) bool {
 	}
 
 	return true
+}
+
+func SaveToFile(blocks []*pb.Block) error {
+	b, err := json.Marshal(blocks)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile("data.json", b, 0644)
+}
+
+func LoadFromFile() (out []*pb.Block, err error) {
+	out = make([]*pb.Block, 0)
+	b, err := os.ReadFile("data.json")
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(b, &out); err != nil {
+		return nil, err
+	}
+	return out, err
 }

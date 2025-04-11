@@ -10,6 +10,7 @@ import (
 	"time"
 
 	pb "blockchain/proto"
+	"blockchain/utils"
 
 	"google.golang.org/grpc"
 )
@@ -38,10 +39,6 @@ func NewMasterServer() *MasterServer {
 }
 
 func (s *MasterServer) Start(ctx context.Context, port int32) error {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
-	}
 
 	server := grpc.NewServer()
 	masterServer := NewMasterServer()
@@ -50,6 +47,14 @@ func (s *MasterServer) Start(ctx context.Context, port int32) error {
 	pb.RegisterBlockchainServer(server, blockchainServer)
 
 	masterServer.SetBlockchainService(blockchainServer)
+
+	blocks, err := utils.LoadFromFile()
+	if err != nil {
+		fmt.Println("existing data not found. Start refreshly new")
+	}
+	if len(blocks) > 0 {
+		blockchainServer.blocks = blocks
+	}
 
 	blk, _ := blockchainServer.GetHighestBlock(ctx, nil)
 	if blk == nil {
@@ -63,6 +68,11 @@ func (s *MasterServer) Start(ctx context.Context, port int32) error {
 		blk.GetHash(),
 		blk.GetHeader().GetBits(),
 	)
+
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
 
 	log.Printf("Master server listening at %v", lis.Addr())
 	if err := server.Serve(lis); err != nil {
@@ -169,6 +179,7 @@ func (s *MasterServer) notifyNodesOfNewRequirements(header *pb.BlockHeader) {
 }
 
 func (s *MasterServer) ProcessAfterNewBlock(ctx context.Context, block *pb.Block) error {
+	utils.SaveToFile(s.blockchainServer.blocks)
 	timeDiff := time.Since(s.lastNewBlockAt)
 	fmt.Printf("%s - %s\n", hex.EncodeToString(block.GetHash()), timeDiff.String())
 	bits := block.GetHeader().GetBits()
